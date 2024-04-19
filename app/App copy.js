@@ -6,19 +6,23 @@ import {
   TextInput,
   TouchableOpacity,
   ImageBackground,
+  Vibration,
 } from "react-native";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link } from "expo-router";
 import { useRoute } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/MaterialIcons";
 import styles from "../Styles/app-styles";
 import BackgroundImage from "../assets/Background.jpg";
+import { Audio } from "expo-av";
+import Lost from "../assets/Sounds/Lost.mp3";
+import Won from "../assets/Sounds/Won.mp3";
 
 const App = () => {
   const [deck, setDeck] = useState([]);
   const [dealer, setDealer] = useState({ cards: [], count: 0 });
   const [player, setPlayer] = useState({ cards: [], count: 0 });
-  const [wallet, setWallet] = useState(100); // Default wallet amount set to 100 as in your original component
+  const [wallet, setWallet] = useState(100); // Default wallet amount set to 100
   const [inputValue, setInputValue] = useState("");
   const [currentBet, setCurrentBet] = useState(null);
   const [betPlaced, setBetPlaced] = useState(false);
@@ -27,34 +31,44 @@ const App = () => {
   const [isPaused, setIsPaused] = useState(false);
 
   const route = useRoute();
-  const betLimit = route.params?.limit || 100;
+  const betLimit = parseInt(route.params?.limit, 10) || 100;
+  console.log("Bet limit:", betLimit);
 
-  const loadWallet = async () => {
-    try {
-      const savedWallet = await AsyncStorage.getItem("wallet");
-      if (savedWallet !== null) {
-        const parsedWallet = parseInt(savedWallet, 10);
-        if (!isNaN(parsedWallet)) {
-          setWallet(parsedWallet);
+  useEffect(() => {
+    const loadWallet = async () => {
+      try {
+        const savedWallet = await AsyncStorage.getItem("wallet");
+        if (savedWallet !== null) {
+          const parsedWallet = parseInt(savedWallet, 10);
+          if (parsedWallet == 0) {
+            console.log("Wallet is empty, setting to default");
+            setWallet(100);
+            updateWallet(100);
+          }
+          if (!isNaN(parsedWallet)) {
+            setWallet(parsedWallet);
+          } else {
+            console.error("Failed to parse wallet value:", savedWallet);
+            setWallet(100);
+            updateWallet(100);
+          }
         } else {
-          console.error("Failed to parse wallet value:", savedWallet);
-          setWallet(100); // Set a valid default if parsing fails
-          updateWallet(100); // Save the valid default
+          console.log("No wallet found in AsyncStorage, setting to default");
+          setWallet(100);
+          updateWallet(100);
         }
-      } else {
-        console.log("No wallet found in AsyncStorage, setting to default");
-        setWallet(100);
-        updateWallet(100); // Initialize AsyncStorage with default value if not set
+      } catch (error) {
+        console.error("Failed to load the wallet from AsyncStorage", error);
       }
-    } catch (error) {
-      console.error("Failed to load the wallet from AsyncStorage", error);
-    }
-  };
+    };
+
+    loadWallet();
+  }, []); // The empty array ensures this effect runs only once after the component mounts
 
   const updateWallet = async (newWalletValue) => {
     if (isNaN(newWalletValue)) {
       console.error("Attempted to save invalid wallet value:", newWalletValue);
-      return; // Stop saving if the value is invalid
+      return;
     }
     try {
       await AsyncStorage.setItem("wallet", newWalletValue.toString());
@@ -80,11 +94,20 @@ const App = () => {
   };
 
   const placeBet = async (type = "new") => {
-    let betAmount = parseInt(inputValue, 10);
+    let betAmount;
+
+    if (type === "rebet") {
+      betAmount = currentBet; // Use the last bet amount for a rebet
+    } else {
+      betAmount = parseInt(inputValue, 10); // Parse a new bet amount for a new bet
+      setCurrentBet(betAmount); // Store the current bet amount
+    }
+
     if (isNaN(betAmount) || betAmount <= 0 || betAmount > betLimit) {
       setMessage("Invalid bet amount.");
       return;
     }
+
     if (betAmount > wallet) {
       setMessage("Insufficient funds to place that bet.");
       return;
@@ -92,7 +115,6 @@ const App = () => {
 
     const newWallet = wallet - betAmount;
     if (!isNaN(newWallet)) {
-      setCurrentBet(betAmount);
       updateWallet(newWallet); // Use the updated wallet function
       setBetPlaced(true);
       setMessage("Bet placed. Play your hand!");
@@ -105,19 +127,36 @@ const App = () => {
   };
 
   const dealCards = (deck) => {
+    // Draw cards for the player
     const { updatedDeck, randomCard: playerCard1 } = getRandomCard(deck);
-    const { updatedDeck: finalDeck, randomCard: dealerCard1 } =
+    const { updatedDeck: deckAfterPlayerCard2, randomCard: playerCard2 } =
       getRandomCard(updatedDeck);
+
+    // Draw cards for the dealer, but hide the second one initially
+    const { updatedDeck: deckAfterDealerCard1, randomCard: dealerCard1 } =
+      getRandomCard(deckAfterPlayerCard2);
+    const { updatedDeck: finalDeck, randomCard: dealerCard2 } =
+      getRandomCard(deckAfterDealerCard1);
+
+    // Update the deck in the state
     setDeck(finalDeck);
+
+    // Set up the player's state
     setPlayer({
-      cards: [playerCard1],
-      count: calculateHandValue([playerCard1]),
+      cards: [playerCard1, playerCard2],
+      count: calculateHandValue([playerCard1, playerCard2]),
     });
+
+    // Set up the dealer's state with the second card hidden
     setDealer({
-      cards: [dealerCard1, {}],
-      count: calculateHandValue([dealerCard1, {}]),
+      cards: [dealerCard1, {}], // Placeholder for hidden card
+      count: calculateHandValue([dealerCard1]), // Show only the first card's value
     });
+
+    // Set the game message
     setMessage("Bet placed. Play your hand!");
+
+    // Reset the game over status
     setGameOver(false);
   };
 
@@ -154,41 +193,69 @@ const App = () => {
       const newCount = calculateHandValue(newPlayerCards);
       setPlayer({ cards: newPlayerCards, count: newCount });
       setDeck(updatedDeck);
+
       if (newCount > 21) {
-        setMessage("BUST!");
+        revealDealerSecondCard(); // New function to handle revealing the dealer's card
+        setMessage("BUST! Dealer wins.");
         setGameOver(true);
+        playSound(Lost, 1);
+      }
+      if (newCount === 21) {
+        stand();
       }
     }
   };
 
+  const revealDealerSecondCard = () => {
+    const newDealerCards = [...dealer.cards];
+    // Check if the second card is still a placeholder
+    if (Object.keys(newDealerCards[1]).length === 0) { // Assuming placeholder is an empty object {}
+        const { updatedDeck, randomCard } = getRandomCard(deck);
+        newDealerCards[1] = randomCard; // Replace the placeholder with the actual card
+        setDeck(updatedDeck);
+        const newDealerCount = calculateHandValue(newDealerCards);
+        setDealer({ cards: newDealerCards, count: newDealerCount });
+    }
+};
+
   const stand = () => {
     if (!gameOver && currentBet) {
-      let newDealerCards = [...dealer.cards];
-      let dealerHandValue = calculateHandValue(newDealerCards);
-
+      revealDealerSecondCard(); // Use the new function to handle card revealing
+      let dealerHandValue = dealer.count;
       while (dealerHandValue < 17) {
         const { updatedDeck, randomCard } = getRandomCard(deck);
-        newDealerCards.push(randomCard);
-        dealerHandValue = calculateHandValue(newDealerCards);
+        dealer.cards.push(randomCard);
+        dealerHandValue = calculateHandValue(dealer.cards); // Recalculate after each card is added
         setDeck(updatedDeck);
+        setDealer({ cards: dealer.cards, count: dealerHandValue }); // Update state here as well
       }
 
-      setDealer({ cards: newDealerCards, count: dealerHandValue });
+      // Compare outcomes
+      compareHands(dealerHandValue);
+    }
+  };
 
-      if (dealerHandValue > 21) {
-        setMessage("Dealer bust! You win!");
-        setWallet(wallet + currentBet * 2);
-        setGameOver(true);
-      } else if (player.count > dealerHandValue) {
-        setMessage("You win!");
-        setWallet(wallet + currentBet * 2);
-        setGameOver(true);
-      } else if (dealerHandValue > player.count) {
-        setMessage("Dealer wins.");
-        setGameOver(true);
-      } else {
-        setMessage("Push.");
-      }
+  const compareHands = (dealerHandValue) => {
+    if (dealerHandValue > 21) {
+      setMessage("Dealer bust! You win!");
+      setWallet(wallet + currentBet * 2);
+      setGameOver(true);
+      triggerVibration();
+      playSound(Won, 1);
+    } else if (player.count > dealerHandValue) {
+      setMessage("You win!");
+      setWallet(wallet + currentBet * 2);
+      setGameOver(true);
+      triggerVibration();
+      playSound(Won, 1);
+    } else if (dealerHandValue > player.count) {
+      setMessage("Dealer wins.");
+      setGameOver(true);
+      playSound(Lost, 1);
+    } else {
+      setMessage("Push.");
+      setWallet(wallet + currentBet);
+      setGameOver(true);
     }
   };
 
@@ -196,12 +263,54 @@ const App = () => {
     setIsPaused(!isPaused);
   };
 
+  // Trigger vibration
+  const triggerVibration = () => {
+    Vibration.vibrate();
+  };
+
   const rebet = () => {
+    console.log(
+      "Attempting to rebet with currentBet:",
+      currentBet,
+      "Wallet:",
+      wallet,
+      "GameOver:",
+      gameOver
+    );
     if (gameOver && currentBet && wallet >= currentBet) {
+      console.log("Rebet conditions met, placing bet.");
+      setGameOver(false); // Prepare for a new game
       placeBet("rebet");
     } else {
-      setMessage("Cannot rebet. Check your balance or if the game is over.");
+      console.log("Rebet conditions not met.");
+      if (!gameOver) {
+        setMessage("Wait until the game is over to rebet.");
+      } else if (!currentBet) {
+        setMessage("No current bet to rebet.");
+      } else if (wallet < currentBet) {
+        setMessage("Insufficient funds to rebet.");
+      }
       setBetPlaced(false);
+    }
+  };
+
+  const playSound = async (soundFile, volume = 1) => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        soundFile,
+        { shouldPlay: true }
+      );
+      await sound.setVolumeAsync(volume);
+      await sound.playAsync();
+  
+      // Optionally, unload the sound from memory after it's played to free up resources
+      sound.setOnPlaybackStatusUpdate(async (status) => {
+        if (status.didJustFinish) {
+          await sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.error("Error playing sound:", error);
     }
   };
 
@@ -230,9 +339,9 @@ const App = () => {
         </View>
       )}
       <View style={styles.walletContainer}>
-        <Icon name="wallet" size={60} color="#000" />
         <Text style={styles.walletText}>${wallet}</Text>
         <View style={styles.underline} />
+        <Icon name="wallet" size={60} color="#000" />
       </View>
 
       <View style={styles.playArea}>
@@ -256,23 +365,23 @@ const App = () => {
           </View>
         </View>
         <View style={styles.playerCards}>
-          <Text>Your Hand ({player.count}):</Text>
-          <View style={styles.cardsContainer}>
-            {player.cards.map((card, index) => (
-              <View style={styles.card} key={index}>
-                <Text
-                  style={[
-                    styles.cardText,
-                    card.suit === "♦" || card.suit === "♥"
-                      ? styles.cardRed
-                      : null,
-                  ]}
-                >
-                  {card.number} {card.suit}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.handText}>Your Hand ({player.count}):</Text>
+        </View>
+        <View style={styles.cardsContainer}>
+          {player.cards.map((card, index) => (
+            <View style={styles.card} key={index}>
+              <Text
+                style={[
+                  styles.cardText,
+                  card.suit === "♦" || card.suit === "♥"
+                    ? styles.cardRed
+                    : null,
+                ]}
+              >
+                {card.number} {card.suit}
+              </Text>
+            </View>
+          ))}
         </View>
       </View>
       <Text>{message}</Text>
@@ -297,12 +406,7 @@ const App = () => {
           <TouchableOpacity
             style={styles.rebetButton}
             onPress={rebet}
-            disabled={
-              !gameOver ||
-              !currentBet ||
-              wallet < currentBet ||
-              player.count > 21
-            } // Disable rebet if player has busted
+            disabled={!gameOver || wallet < currentBet} // Remove player.count > 21 condition
           >
             <Text style={styles.hitStandText}>Rebet</Text>
             <Icon name="replay" size={50} color="#000" />

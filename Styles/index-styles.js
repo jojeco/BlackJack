@@ -19,10 +19,7 @@ export const indexStyles = StyleSheet.create({
     textAlign: "center",
     alignContent: "center",
     margin: 10,
-    borderWidth: 1,
-    borderColor: "black",
-    borderRadius: 10,
-
+    
   },
   textContainer: {
     width: "100%",
@@ -34,28 +31,32 @@ export const indexStyles = StyleSheet.create({
     margin: 10,
     position: "absolute",
     top: 20,
+    
   },
   titleStyle: {
     color: "white",
     fontSize: 32,
     textAlign: "center",
     alignContent: "center",
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',  // Color of the shadow; semi-transparent black
-    textShadowOffset: { width: -1, height: 1 },  // X and Y offset of the shadow
-    textShadowRadius: 15,  // Blur radius of the shadow
-    
+    fontWeight: "bold",
+    textShadowColor: "rgba(0, 0, 0, 0.75)", // Color of the shadow; semi-transparent black
+    textShadowOffset: { width: -1, height: 1 }, // X and Y offset of the shadow
+    textShadowRadius: 15, // Blur radius of the shadow
+
   },
-  subTitleStyle: {
+  // Example styling adjustments in your index-styles.js
+  subtitleStyle: {
     color: "white",
-    fontSize: 24,
-    textAlign: "center",
-    alignContent: "center",
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',  // Color of the shadow; semi-transparent black
-    textShadowOffset: { width: -1, height: 1 },  // X and Y offset of the shadow
-    textShadowRadius: 15,  // Blur radius of the shadow
+    fontSize: 18,
+    marginTop: 5,
+    textAlign: "center", // Ensure the text is centrally aligned if that fits your design
+    fontWeight: "bold",
+    textShadowColor: "rgba(0, 0, 0, 0.75)", // Color of the shadow; semi-transparent black
+    textShadowOffset: { width: -1, height: 1 }, // X and Y offset of the shadow
+    textShadowRadius: 20, // Blur radius of the shadow
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
+
   textStyle: {
     color: "#000", // Text color for the button
     fontSize: 16, // Adjust text size as needed
@@ -76,7 +77,7 @@ export const indexStyles = StyleSheet.create({
     borderColor: "black",
     borderRadius: 10,
     padding: 20,
-    
+    margin: 10,
   },
 });
 export default indexStyles;

@@ -42,13 +42,12 @@ const styles = StyleSheet.create({
   dealerCards: {
     marginTop: 20,
     textAlign: 'center',
-    backgroundColor: 'hsl(207, 95%, 8%)',
 
   },
   playerCards: {
     marginTop: 20,
     textAlign: 'center',
-    backgroundColor: 'hsl(207, 95%, 8%)',
+    
     width: '100%',
   },
   cardsContainer: {

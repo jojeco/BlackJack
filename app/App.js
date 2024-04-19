@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   ImageBackground,
+  Vibration,
 } from "react-native";
 import { Link, useLocalSearchParams } from "expo-router";
 import styles from "../Styles/app-styles.js";
@@ -262,6 +263,7 @@ class App extends Component {
           gameOver: true,
           message: "Dealer bust! You win!",
         });
+        this.triggerVibration();
       } else {
         const winner = this.getWinner(dealer, this.state.player);
         let wallet = this.state.wallet;
@@ -276,12 +278,15 @@ class App extends Component {
         ) {
           wallet += this.state.currentBet * 2.5;
           message = "Blackjack! You win!";
+          this.triggerVibration();
         } else if (winner === "player" && this.state.player.count === 21) {
           wallet += this.state.currentBet * 2.5;
           message = "Blackjack!";
+          this.triggerVibration();
         } else if (winner === "player") {
           wallet += this.state.currentBet * 2;
           message = "You win!";
+          this.triggerVibration();
         } else {
           wallet += this.state.currentBet;
           message = "Push.";
@@ -366,6 +371,11 @@ class App extends Component {
     }
   }
 
+  // Trigger vibration
+  triggerVibration = () => {
+    Vibration.vibrate();
+  };
+
   renderPauseScreen() {
     if (this.state.isPaused) {
       return (
@@ -375,18 +385,14 @@ class App extends Component {
             <TouchableOpacity
               onPress={this.togglePause}
               style={styles.pauseButtons}
-              activeOpacity={0.7} 
+              activeOpacity={0.7} // Optional: Changes the opacity feedback on press, default is 0.2
             >
               <Text style={styles.pauseButtonText}>Resume Game</Text>
             </TouchableOpacity>
-            <Link href={"/"}>
-            <TouchableOpacity
-              onPress={this.togglePause}
-              style={styles.pauseButtons}
-              activeOpacity={0.7} 
-            >
-                <Text style={styles.pauseButtonText}>Home</Text>
-              </TouchableOpacity>
+            <Link href={"/"} style={styles.pauseButtons}>
+              <View>
+                <Text>Home</Text>
+              </View>
             </Link>
           </View>
         </View>
