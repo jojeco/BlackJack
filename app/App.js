@@ -1,6 +1,15 @@
 import React, { Component } from "react";
-import { View, Text, Button, TextInput, FlatList } from "react-native";
-import styles from "./Styles/app-styles.js";
+import {
+  View,
+  Text,
+  Button,
+  TextInput,
+  FlatList,
+  TouchableOpacity,
+} from "react-native";
+import { Link } from "expo-router";
+import styles from "../Styles/app-styles.js";
+import Icon from "react-native-vector-icons/MaterialIcons";
 
 class App extends Component {
   constructor(props) {
@@ -15,6 +24,7 @@ class App extends Component {
       betPlaced: false,
       gameOver: false,
       message: "",
+      isPaused: false,
     };
   }
 
@@ -27,6 +37,9 @@ class App extends Component {
     );
     return deck;
   }
+  togglePause = () => {
+    this.setState((prevState) => ({ isPaused: !prevState.isPaused }));
+  };
 
   dealCards(deck) {
     const playerCard1 = this.getRandomCard(deck);
@@ -76,6 +89,11 @@ class App extends Component {
     updatedDeck.splice(randomIndex, 1);
     return { randomCard, updatedDeck };
   }
+
+  canPlaceBet() {
+    return this.state.gameOver || this.state.betPlaced === false;
+  }
+
   canChangeBet() {
     const { dealer, player, gameOver } = this.state;
     // Allow betting if there are no cards dealt and game is not over
@@ -86,20 +104,45 @@ class App extends Component {
     );
   }
 
-  placeBet() {
-    const currentBet = parseInt(this.state.inputValue, 10);
-    if (currentBet > this.state.wallet) {
-      this.setState({ message: "Insufficient funds to bet that amount." });
-    } else if (isNaN(currentBet) || currentBet <= 0) {
-      this.setState({ message: "Please enter a valid bet amount." });
-    } else {
-      this.setState({
-        wallet: this.state.wallet - currentBet,
-        currentBet,
-        betPlaced: true, // Bet is now placed
-        inputValue: "",
-      });
+  placeBet(type = "new") {
+    let { deck, wallet } = this.state;
+    let currentBet = this.state.currentBet;
+  
+    // Handle bet amount based on type
+    if (type === "new") {
+      currentBet = parseInt(this.state.inputValue, 10);
+      wallet = 100;  // Resets wallet for a new game, which may or may not be intended
+      deck = this.generateDeck();
+    } else if (type === "rebet") {
+      // No need to parse input or change wallet here, reuse the current bet
+      if (deck.length < 10) {
+        deck = this.generateDeck();
+      }
     }
+  
+    // Check for valid bet amount
+    if (currentBet > wallet) {
+      this.setState({ message: "Insufficient funds to bet that amount." });
+      return;
+    }
+    if (isNaN(currentBet) || currentBet <= 0) {
+      this.setState({ message: "Please enter a valid bet amount." });
+      return;
+    }
+  
+    // Deal cards and update the state
+    const { updatedDeck, player, dealer } = this.dealCards(deck);
+    this.setState({
+      deck: updatedDeck,
+      dealer,
+      player,
+      wallet: wallet - currentBet,
+      currentBet,
+      betPlaced: true,
+      inputValue: "",
+      gameOver: false,
+      message: "Bet placed. Play your hand!",
+    });
   }
 
   hit() {
@@ -192,6 +235,9 @@ class App extends Component {
         ) {
           wallet += this.state.currentBet * 2.5;
           message = "Blackjack! You win!";
+        } else if (winner === "player" && this.state.player.count === 21) {
+          wallet += this.state.currentBet * 2.5;
+          message = "Blackjack!";
         } else if (winner === "player") {
           wallet += this.state.currentBet * 2;
           message = "You win!";
@@ -227,19 +273,59 @@ class App extends Component {
     this.setState({ inputValue: text });
   };
 
-  renderCard = ({ item }) => (
-    <Text
-      style={[
-        styles.card,
-        item.suit === "♦" || item.suit === "♥" ? styles.cardRed : null,
-      ]}
-    >
-      {item.number}
-      {item.suit}
-    </Text>
+  renderCard = (card) => (
+    <View style={styles.card}>
+      <Text
+        style={[
+          styles.cardText, // Adjusted for text styling
+          card.suit === "♦" || card.suit === "♥" ? styles.cardRed : null,
+        ]}
+      >
+        {card.number}
+        {card.suit}
+      </Text>
+    </View>
   );
+
   changeBet() {
     this.setState({ betPlaced: false, currentBet: null });
+  }
+
+  rebet() {
+    console.log("Rebet called. Current Bet:", this.state.currentBet, "Wallet:", this.state.wallet, "Game Over:", this.state.gameOver);
+  
+    if (this.state.currentBet > 0 && this.state.wallet >= this.state.currentBet && this.state.gameOver) {
+      console.log("Placing bet again.");
+      this.setState({
+        betPlaced: true,
+        message: "Your bet has been placed again!"
+      }, () => {
+        this.placeBet("rebet");  // Use a distinct type for rebetting
+      });
+    } else {
+      console.log("Failed to place bet.");
+      alert("Cannot place the bet. Check your balance, if betting is still open, or if the game is over.");
+      this.setState({ betPlaced: false });
+    }
+  }
+
+  renderPauseScreen() {
+    if (this.state.isPaused) {
+      return (
+        <View style={styles.pauseContainer}>
+          <View style={styles.pauseMenu}>
+            <Text style={styles.pauseTitle}>Paused</Text>
+            <Button title="Resume Game" onPress={this.togglePause} />
+            <Link href={"/"}>
+              <View>
+                <Text>Home</Text>
+              </View>
+            </Link>
+          </View>
+        </View>
+      );
+    }
+    return null;
   }
 
   render() {
@@ -252,66 +338,86 @@ class App extends Component {
       message,
       gameOver,
       betPlaced,
+      isPaused,
     } = this.state;
+
     return (
       <View style={styles.container}>
-        <View style={styles.buttons}>
-          <Button title="New Game" onPress={() => this.startNewGame()} />
-          {gameOver && (
-            <Button
-              title="Continue"
-              onPress={() => this.startNewGame("continue")}
-            />
-          )}
-          <Button
-            title="Hit"
-            onPress={() => this.hit()}
-            disabled={!currentBet || gameOver}
-          />
-          <Button
-            title="Stand"
-            onPress={() => this.stand()}
-            disabled={!currentBet || gameOver}
-          />
-          <Button
-            title="Change Bet"
-            onPress={this.changeBet.bind(this)}
-            disabled={gameOver}
-          />
+        <TouchableOpacity style={styles.pauseButton} onPress={this.togglePause}>
+          <Icon name="pause" size={50} color="#000" />
+        </TouchableOpacity>
+        {this.renderPauseScreen()}
+        <View style={styles.walletContainer}>
+          <Icon name="wallet" size={60} color="#000" />
+          <Text style={styles.walletText}>${wallet}</Text>
+          <View style={styles.underline} />
         </View>
-        <Text>Wallet: ${wallet}</Text>
-        {!betPlaced && (
-          <View style={styles.inputBet}>
-            <TextInput
-              keyboardType="numeric"
-              value={inputValue}
-              onChangeText={(text) => this.setState({ inputValue: text })}
-              placeholder="Enter your bet"
-            />
-            <Button title="Place Bet" onPress={() => this.placeBet()} />
-          </View>
-        )}
-        {player && (
-          <>
-            <Text>Your Hand ({player.count})</Text>
-            <FlatList
-              data={player.cards}
-              renderItem={this.renderCard}
-              keyExtractor={(item, index) => index.toString()}
-            />
-          </>
-        )}
+
         {dealer && (
           <>
-            <Text>Dealer's Hand ({dealer.count})</Text>
-            <FlatList
-              data={dealer.cards}
-              renderItem={this.renderCard}
-              keyExtractor={(item, index) => index.toString()}
-            />
+            <Text>Dealer's Hand ({dealer.count}):</Text>
+            <View style={styles.cardsContainer}>
+              {dealer.cards.map((card, index) => this.renderCard(card))}
+            </View>
+          </>
+        )}
+
+        {player && (
+          <>
+            <Text>Your Hand ({player.count}):</Text>
+            <View style={styles.cardsContainer}>
+              {player.cards.map((card, index) => this.renderCard(card))}
+            </View>
           </>
         )}
         <Text>{message}</Text>
+        <View style={styles.buttons}>
+          <View style={styles.hitStandContainer}>
+            <TouchableOpacity
+              style={styles.hitButton}
+              onPress={() => this.hit()}
+              disabled={!currentBet || gameOver}
+            >
+              <Text style={styles.hitStandText}>Hit</Text>
+              <Icon name="control-point" size={50} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.StandButton}
+              onPress={() => this.stand()}
+              disabled={!currentBet || gameOver}
+            >
+              <Text style={styles.hitStandText}>Stand</Text>
+              <Icon name="arrow-circle-down" size={50} color="#000" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.buttons}
+              onPress={() => this.rebet()}
+            >
+              <Text style={styles.hitStandText}>Rebet</Text>
+              <Icon name="replay" size={50} color="#000" />
+            </TouchableOpacity>
+          </View>
+          <Button
+            title="Choose Bet"
+            onPress={this.changeBet.bind(this)}
+            disabled={!this.canPlaceBet()}
+          />
+          {!betPlaced && (
+            <View style={styles.inputBet}>
+              <TextInput
+                keyboardType="numeric"
+                value={inputValue}
+                onChangeText={(text) => this.inputChange(text)}
+                placeholder="Enter your bet"
+              />
+              <Button
+                title="Place Bet"
+                onPress={() => this.placeBet()}
+                disabled={!this.canPlaceBet()}
+              />
+            </View>
+          )}
+        </View>
       </View>
     );
   }
