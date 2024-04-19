@@ -2,146 +2,184 @@ import { StyleSheet } from "react-native";
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#4CA1AF",
     flex: 1,
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 20,
+    justifyContent: 'flex-start',  // Align items from the top
+    alignItems: 'center',
+    width: '100%',
+    height: '105%',  // Ensure container covers full screen
+    position: 'absolute',  // Overlay on top of the background image
   },
-  buttonContainer: {
-    width: "100%", // Ensures the button container uses full width
-    justifyContent: "center",
-    alignItems: "center",
-    position: "absolute", // Ensures the button container is positioned at the bottom
-    bottom: 0, // Aligns the button container at the bottom of the screen
-    flexDirection: "row",
-    padding: 10, // Adds padding inside the button container
-    backgroundColor: "transparent", // Optional: can be set to a color to highlight the button area
+  pauseButton: {
+    position: 'absolute',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    top: 35,
+    left: 15,
+    zIndex: 10,
+    borderRadius: 10,
   },
+  walletContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    textAlign: 'bottom',
+    top: 20,
+    right: 20,  
+    
+  },
+  playArea: {
+    flex: 1,
+    padding: 50,
+    alignItems: 'center',
+    marginTop: 140,  // Lower the cards a bit from the top
+    
+  },
+  handText : {
+    fontSize: 20,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  dealerCards: {
+    marginTop: 20,
+    textAlign: 'center',
+    backgroundColor: 'hsl(207, 95%, 8%)',
 
+  },
+  playerCards: {
+    marginTop: 20,
+    textAlign: 'center',
+    backgroundColor: 'hsl(207, 95%, 8%)',
+    width: '100%',
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  actionContainer: {
+    position: 'absolute',
+    bottom: 30,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   hitStandContainer: {
-    flexDirection: "row", // Lays out children (buttons) in a row
-    justifyContent: "center", // Centers the buttons horizontally
-    padding: 10, // Adds padding around the buttons
-    width: "50%", // Adjust this percentage based on your design needs
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 20,
   },
-  form: {
-    flexDirection: "row",
-    justifyContent: "center",
+  hitButton: {
+    alignItems: 'center',
+    backgroundColor: '#006400',
+    borderRadius: 10,
+    padding: 10,
   },
-  title: {
-    textAlign: "center",
-    fontSize: 50,
+  StandButton: {
+    alignItems: 'center',
+    backgroundColor: '#8b0000',
+    borderRadius: 10,
+    padding: 10,
   },
-  tet: {
-    textAlign: "center",
+  rebetButton: {
+    alignItems: 'center',
+    backgroundColor: '#696969',
+    borderRadius: 10,
+    padding: 10,
   },
+  betContainer: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 10,
+    width: '90%',
+  },
+  inputBet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  input: {
+    backgroundColor: '#fff',
+    width: '75%',
+    padding: 10,
+    borderRadius: 5,
+  },
+  hitStandText: {
+    fontSize: 20,
+    color: 'white',
+  },
+  
+  walletText: {
+    fontSize: 22,
+  },
+  
   card: {
     height: 150,
     width: 100,
-    backgroundColor: "#BFBFBF",
+    backgroundColor: '#BFBFBF',
     borderRadius: 5,
-    justifyContent: "center",
-    alignItems: "center",
-    marginHorizontal: 5, // Space between cards
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  cardText: {
+    fontSize: 20,
+    color: "black",
   },
   cardRed: {
     color: "red",
   },
-  cardsContainer: {
-    flexDirection: "row", // Layout cards horizontally
-    justifyContent: "center", // Center the cards horizontally
-    alignItems: "center", // Center the cards vertically
-    flexWrap: "wrap", // Allows for wrapping if too many cards
-    marginBottom: 20,
-  },
-  cardText: {
-    fontSize: 20,
-    color: "black", // Ensure text is visible
-  },
-  inputBet: {
-    flexDirection: "row",
+  buttons: {
+    position: "absolute",
+    bottom: 0, // Anchors the button container to the bottom
+    left: 0,
+    right: 0,
     justifyContent: "center",
+    alignItems: "center",
+    padding: 10,
   },
+ 
   pauseContainer: {
     position: "absolute",
     width: "100%",
     height: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.5)", // Semi-transparent background
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 1,
+
   },
   pauseMenu: {
     backgroundColor: "white",
+    borderRadius: 10,
     padding: 20,
-    borderRadius: 10,
-    width: 300,
     alignItems: "center",
-  },
-  pauseTitle: {
-    fontSize: 24,
-    marginBottom: 20,
-  },
-  pauseButton: {
-   
-    borderBlockColor: "black",
-    borderWidth: 3,
-    borderRadius: 50,
-    position: "absolute", // This will take the button out of the normal flow and position it absolutely
-    top: 20, // 20 pixels from the top edge of the screen
-    left: 20, // 20 pixels from the left edge of the screen
-  },
-  hitButton: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "green",
-    borderRadius: 10,
-    padding: 10,
-    margin: 10,
-  },
-  StandButton: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "red",
-    borderRadius: 10,
-    padding: 10,
-    margin: 10,
-  },
-  hitStandText: {
-    color: "white",
-    fontSize: 20,
-    alignContent: "center",
-  },
-  walletContainer: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    position: "absolute",
-    top: 20,
-    right: 20,
-  },
-  walletText: {
-    fontSize: 22,
-    
+    zIndex: 2, // Ensure it's above the pauseContainer overlay
   },
   underline: {
     position: 'absolute',
-    height: 2, // Thickness of the underline
-    backgroundColor: 'black', // Color of the underline
-    bottom: 0, // Adjust this to move the underline up or down
-    width: '90%', // Make sure the underline spans the width of the text container
+    height: 2, 
+    backgroundColor: 'black', 
+    bottom: 0, 
+    width: '90%', 
   },
+  pauseButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    textAlign: 'center',
+    marginTop: 20,
+    backgroundColor: 'grey',
+    padding: 10,
+    borderRadius: 5,
+    width: '60%',
+
+  },
+  pauseButtonText: {
+    fontSize: 20,
+  },
+  
 });
+
 export default styles;
 
-/*<Button
-            title="Hit"
-            onPress={() => this.hit()}
-            disabled={!currentBet || gameOver}
-          />
-          <Button
-            title="Stand"
-            onPress={() => this.stand()}
-            disabled={!currentBet || gameOver}
-          />
-          */

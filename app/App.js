@@ -4,12 +4,15 @@ import {
   Text,
   Button,
   TextInput,
-  FlatList,
   TouchableOpacity,
+  ImageBackground,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import styles from "../Styles/app-styles.js";
 import Icon from "react-native-vector-icons/MaterialIcons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import BackgroundImage from "../assets/Background.jpg";
+import indexStyles from "../Styles/index-styles";
 
 class App extends Component {
   constructor(props) {
@@ -18,7 +21,7 @@ class App extends Component {
       deck: [],
       dealer: null,
       player: null,
-      wallet: 100,
+      wallet: 0,
       inputValue: "",
       currentBet: null,
       betPlaced: false,
@@ -27,6 +30,44 @@ class App extends Component {
       isPaused: false,
     };
   }
+
+  componentDidMount() {
+    this.loadWallet();
+    this.setLimit();
+  }
+
+  setLimit = () => {
+    // Access the limit parameter passed via route state
+    const limit = this.props.route?.state?.limit || 100; // Default to 100 if no limit set
+    this.setState({ betLimit: limit });
+  };
+
+  loadWallet = async () => {
+    try {
+      const savedWallet = await AsyncStorage.getItem("wallet");
+      if (savedWallet !== null) {
+        this.setState({ wallet: parseInt(savedWallet, 10) });
+      } else {
+        // Set a default value if there's nothing in storage
+        this.setState({ wallet: 100 });
+        await AsyncStorage.setItem("wallet", "100");
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load the wallet amount from AsyncStorage.",
+        error
+      );
+    }
+  };
+
+  updateWallet = async (newWalletValue) => {
+    try {
+      await AsyncStorage.setItem("wallet", newWalletValue.toString());
+      this.setState({ wallet: newWalletValue });
+    } catch (error) {
+      console.error("Failed to save the wallet amount to AsyncStorage.", error);
+    }
+  };
 
   generateDeck() {
     const cards = [2, 3, 4, 5, 6, 7, 8, 9, 10, "J", "Q", "K", "A"];
@@ -104,46 +145,46 @@ class App extends Component {
     );
   }
 
-  placeBet(type = "new") {
-    let { deck, wallet } = this.state;
-    let currentBet = this.state.currentBet;
-  
-    // Handle bet amount based on type
+  placeBet = async (type = "new") => {
+    let { deck, wallet, currentBet, betLimit } = this.state;
+
     if (type === "new") {
       currentBet = parseInt(this.state.inputValue, 10);
-      wallet = 100;  // Resets wallet for a new game, which may or may not be intended
+      wallet = 100; // Optionally reset wallet for a new game
       deck = this.generateDeck();
+      await AsyncStorage.setItem("wallet", "100"); // Save the reset wallet value
     } else if (type === "rebet") {
-      // No need to parse input or change wallet here, reuse the current bet
       if (deck.length < 10) {
         deck = this.generateDeck();
       }
     }
-  
-    // Check for valid bet amount
-    if (currentBet > wallet) {
+    console.log("Current Limit:", betLimit);
+    if (isNaN(currentBet) || currentBet <= 0 || currentBet > betLimit) {
+      this.setState({
+        message: "Please enter a valid bet amount within the limit.",
+      });
+      return;
+    } else if (currentBet > wallet) {
       this.setState({ message: "Insufficient funds to bet that amount." });
       return;
     }
-    if (isNaN(currentBet) || currentBet <= 0) {
-      this.setState({ message: "Please enter a valid bet amount." });
-      return;
-    }
-  
-    // Deal cards and update the state
+
+    const newWalletValue = wallet - currentBet;
+    await AsyncStorage.setItem("wallet", newWalletValue.toString());
+
     const { updatedDeck, player, dealer } = this.dealCards(deck);
     this.setState({
       deck: updatedDeck,
       dealer,
       player,
-      wallet: wallet - currentBet,
+      wallet: newWalletValue,
       currentBet,
       betPlaced: true,
       inputValue: "",
       gameOver: false,
       message: "Bet placed. Play your hand!",
     });
-  }
+  };
 
   hit() {
     if (!this.state.gameOver) {
@@ -292,19 +333,35 @@ class App extends Component {
   }
 
   rebet() {
-    console.log("Rebet called. Current Bet:", this.state.currentBet, "Wallet:", this.state.wallet, "Game Over:", this.state.gameOver);
-  
-    if (this.state.currentBet > 0 && this.state.wallet >= this.state.currentBet && this.state.gameOver) {
+    console.log(
+      "Rebet called. Current Bet:",
+      this.state.currentBet,
+      "Wallet:",
+      this.state.wallet,
+      "Game Over:",
+      this.state.gameOver
+    );
+
+    if (
+      this.state.currentBet > 0 &&
+      this.state.wallet >= this.state.currentBet &&
+      this.state.gameOver
+    ) {
       console.log("Placing bet again.");
-      this.setState({
-        betPlaced: true,
-        message: "Your bet has been placed again!"
-      }, () => {
-        this.placeBet("rebet");  // Use a distinct type for rebetting
-      });
+      this.setState(
+        {
+          betPlaced: true,
+          message: "Your bet has been placed again!",
+        },
+        () => {
+          this.placeBet("rebet"); // Use a distinct type for rebetting
+        }
+      );
     } else {
       console.log("Failed to place bet.");
-      alert("Cannot place the bet. Check your balance, if betting is still open, or if the game is over.");
+      alert(
+        "Cannot place the bet. Check your balance, if betting is still open, or if the game is over."
+      );
       this.setState({ betPlaced: false });
     }
   }
@@ -315,11 +372,21 @@ class App extends Component {
         <View style={styles.pauseContainer}>
           <View style={styles.pauseMenu}>
             <Text style={styles.pauseTitle}>Paused</Text>
-            <Button title="Resume Game" onPress={this.togglePause} />
+            <TouchableOpacity
+              onPress={this.togglePause}
+              style={styles.pauseButtons}
+              activeOpacity={0.7} 
+            >
+              <Text style={styles.pauseButtonText}>Resume Game</Text>
+            </TouchableOpacity>
             <Link href={"/"}>
-              <View>
-                <Text>Home</Text>
-              </View>
+            <TouchableOpacity
+              onPress={this.togglePause}
+              style={styles.pauseButtons}
+              activeOpacity={0.7} 
+            >
+                <Text style={styles.pauseButtonText}>Home</Text>
+              </TouchableOpacity>
             </Link>
           </View>
         </View>
@@ -342,36 +409,43 @@ class App extends Component {
     } = this.state;
 
     return (
-      <View style={styles.container}>
+      <ImageBackground source={BackgroundImage} style={styles.container}>
         <TouchableOpacity style={styles.pauseButton} onPress={this.togglePause}>
           <Icon name="pause" size={50} color="#000" />
         </TouchableOpacity>
         {this.renderPauseScreen()}
         <View style={styles.walletContainer}>
-          <Icon name="wallet" size={60} color="#000" />
           <Text style={styles.walletText}>${wallet}</Text>
           <View style={styles.underline} />
+          <Icon name="wallet" size={60} color="#000" />
         </View>
+        <View style={styles.playArea}>
+          {dealer && (
+            <>
+              <View style={styles.dealerCards}>
+                <Text style={styles.handText}>
+                  Dealer's Hand ({dealer.count}):
+                </Text>
+              </View>
+              <View style={styles.cardsContainer}>
+                {dealer.cards.map((card, index) => this.renderCard(card))}
+              </View>
+            </>
+          )}
 
-        {dealer && (
-          <>
-            <Text>Dealer's Hand ({dealer.count}):</Text>
-            <View style={styles.cardsContainer}>
-              {dealer.cards.map((card, index) => this.renderCard(card))}
-            </View>
-          </>
-        )}
-
-        {player && (
-          <>
-            <Text>Your Hand ({player.count}):</Text>
-            <View style={styles.cardsContainer}>
-              {player.cards.map((card, index) => this.renderCard(card))}
-            </View>
-          </>
-        )}
+          {player && (
+            <>
+              <View style={styles.playerCards}>
+                <Text style={styles.handText}>Your Hand ({player.count}):</Text>
+              </View>
+              <View style={styles.cardsContainer}>
+                {player.cards.map((card, index) => this.renderCard(card))}
+              </View>
+            </>
+          )}
+        </View>
         <Text>{message}</Text>
-        <View style={styles.buttons}>
+        <View style={styles.actionContainer}>
           <View style={styles.hitStandContainer}>
             <TouchableOpacity
               style={styles.hitButton}
@@ -390,35 +464,38 @@ class App extends Component {
               <Icon name="arrow-circle-down" size={50} color="#000" />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.buttons}
+              style={styles.rebetButton}
               onPress={() => this.rebet()}
             >
               <Text style={styles.hitStandText}>Rebet</Text>
               <Icon name="replay" size={50} color="#000" />
             </TouchableOpacity>
           </View>
-          <Button
-            title="Choose Bet"
-            onPress={this.changeBet.bind(this)}
-            disabled={!this.canPlaceBet()}
-          />
-          {!betPlaced && (
-            <View style={styles.inputBet}>
-              <TextInput
-                keyboardType="numeric"
-                value={inputValue}
-                onChangeText={(text) => this.inputChange(text)}
-                placeholder="Enter your bet"
-              />
-              <Button
-                title="Place Bet"
-                onPress={() => this.placeBet()}
-                disabled={!this.canPlaceBet()}
-              />
-            </View>
-          )}
+          <View style={styles.betContainer}>
+            <Button
+              title="Choose Bet"
+              onPress={this.changeBet.bind(this)}
+              disabled={!this.canPlaceBet()}
+            />
+            {!betPlaced && (
+              <View style={styles.inputBet}>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={inputValue}
+                  onChangeText={(text) => this.inputChange(text)}
+                  placeholder="Enter your bet"
+                />
+                <Button
+                  title="Place Bet"
+                  onPress={() => this.placeBet()}
+                  disabled={!this.canPlaceBet()}
+                />
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </ImageBackground>
     );
   }
 }
