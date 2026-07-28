@@ -110,6 +110,78 @@ class App extends Component {
     }
   }
 
+  inputChange = (value) => {
+    const cleaned = value.replace(/[^0-9]/g, "");
+    this.setState({ inputValue: cleaned });
+  };
+
+  hit = () => {
+    if (this.state.gameOver || !this.state.currentBet) return;
+    let deck = [...this.state.deck];
+    if (deck.length === 0) deck = this.generateDeck();
+    const { randomCard, updatedDeck } = this.getRandomCard(deck);
+    const cards = [...this.state.player.cards, randomCard];
+    const count = this.getCount(cards);
+    const bet = Number(this.state.currentBet) || 0;
+    if (count > 21) {
+      this.setState({
+        deck: updatedDeck,
+        player: { cards, count },
+        gameOver: true,
+        message: `Bust with ${count}! You lose $${bet}.`,
+      });
+    } else if (count === 21) {
+      this.setState({
+        deck: updatedDeck,
+        player: { cards, count },
+        message: "21! Press Stand.",
+      });
+    } else {
+      this.setState({
+        deck: updatedDeck,
+        player: { cards, count },
+        message: null,
+      });
+    }
+  };
+
+  stand = () => {
+    if (this.state.gameOver || !this.state.currentBet) return;
+    let deck = [...this.state.deck];
+    let dealerCards = [...this.state.dealer.cards];
+    let dealerCount = this.getCount(dealerCards);
+    while (dealerCount < 17) {
+      if (deck.length === 0) deck = this.generateDeck();
+      const { randomCard, updatedDeck } = this.getRandomCard(deck);
+      deck = updatedDeck;
+      dealerCards.push(randomCard);
+      dealerCount = this.getCount(dealerCards);
+    }
+    const playerCount = this.state.player.count;
+    const bet = Number(this.state.currentBet) || 0;
+    let wallet = this.state.wallet;
+    let message;
+    if (dealerCount > 21) {
+      wallet += bet * 2;
+      message = `Dealer busts with ${dealerCount}! You win $${bet}.`;
+    } else if (playerCount > dealerCount) {
+      wallet += bet * 2;
+      message = `You win $${bet}! (${playerCount} vs ${dealerCount})`;
+    } else if (playerCount === dealerCount) {
+      wallet += bet;
+      message = `Push at ${playerCount}. Bet returned.`;
+    } else {
+      message = `Dealer wins ${dealerCount} vs ${playerCount}. You lose $${bet}.`;
+    }
+    this.setState({
+      deck,
+      dealer: { cards: dealerCards, count: dealerCount },
+      wallet,
+      gameOver: true,
+      message,
+    });
+  };
+
   getRandomCard(deck) {
     const updatedDeck = [...deck];  // Copy the deck to avoid direct mutation
     const randomIndex = Math.floor(Math.random() * updatedDeck.length);
@@ -155,6 +227,7 @@ class App extends Component {
           <Button title="New Game" onPress={() => this.startNewGame("new")} />
           <Button title="Hit" onPress={() => this.hit()} disabled={!currentBet || gameOver} />
           <Button title="Stand" onPress={() => this.stand()} disabled={!currentBet || gameOver} />
+          <Button title="Next Hand" onPress={() => this.startNewGame("continue")} disabled={!gameOver} />
         </View>
         <Text>Wallet: ${wallet}</Text>
         {!currentBet && (
