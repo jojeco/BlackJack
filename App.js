@@ -1,6 +1,7 @@
 import React, { Component } from "react";
 import { View, Text, Button, TextInput, FlatList, Image } from "react-native";
 import styles from "./Styles/app-styles.js";
+import cardImages from "./assets/cardImages.js";
 
 class App extends Component {
   constructor(props) {
@@ -45,9 +46,8 @@ class App extends Component {
     };
   
     const number = cardNames[card.number] || card.number.toString();  // Map face cards to their names, or convert number to string
-    const uri = `./assets/cards/${number}_of_${suits[card.suit]}.png`;
-    return { uri };
-    
+    const key = `${number}_of_${suits[card.suit]}`;
+    return cardImages[key];
   };
   
 
@@ -96,10 +96,14 @@ class App extends Component {
       message: null,
     });
   };
-  placeBet() {
-    const currentBet = this.state.inputValue;
+  inputChange = (text) => this.setState({ inputValue: text.replace(/[^0-9]/g, "") });
 
-    if (currentBet > this.state.wallet) {
+  placeBet() {
+    const currentBet = Number(this.state.inputValue);
+
+    if (!currentBet || currentBet <= 0) {
+      this.setState({ message: "Please enter a valid bet." });
+    } else if (currentBet > this.state.wallet) {
       this.setState({ message: "Insufficient funds to bet that amount." });
     } else if (currentBet % 1 !== 0) {
       this.setState({ message: "Please bet whole numbers only." });
@@ -109,6 +113,65 @@ class App extends Component {
       this.setState({ wallet, inputValue: "", currentBet });
     }
   }
+
+  hit = () => {
+    if (this.state.gameOver || !this.state.currentBet) return;
+
+    const { randomCard, updatedDeck } = this.getRandomCard(this.state.deck);
+    const cards = [...this.state.player.cards, randomCard];
+    const count = this.getCount(cards);
+    const player = { cards, count };
+
+    if (count > 21) {
+      this.setState({
+        deck: updatedDeck,
+        player,
+        gameOver: true,
+        message: "Bust! You went over 21.",
+      });
+    } else {
+      this.setState({ deck: updatedDeck, player });
+    }
+  };
+
+  stand = () => {
+    if (this.state.gameOver || !this.state.currentBet) return;
+
+    const { wallet, currentBet } = this.state;
+    let deck = this.state.deck;
+    let dealerCards = [...this.state.dealer.cards];
+    let dealerCount = this.getCount(dealerCards);
+
+    while (dealerCount < 17) {
+      const { randomCard, updatedDeck } = this.getRandomCard(deck);
+      dealerCards = [...dealerCards, randomCard];
+      deck = updatedDeck;
+      dealerCount = this.getCount(dealerCards);
+    }
+
+    const playerCount = this.state.player.count;
+    const bet = Number(currentBet);
+    let message;
+    let newWallet = wallet;
+
+    if (dealerCount > 21 || playerCount > dealerCount) {
+      message = "You win!";
+      newWallet = wallet + bet * 2;
+    } else if (playerCount === dealerCount) {
+      message = "Push. Bet refunded.";
+      newWallet = wallet + bet;
+    } else {
+      message = "Dealer wins.";
+    }
+
+    this.setState({
+      deck,
+      dealer: { cards: dealerCards, count: dealerCount },
+      wallet: newWallet,
+      gameOver: true,
+      message,
+    });
+  };
 
   getRandomCard(deck) {
     const updatedDeck = [...deck];  // Copy the deck to avoid direct mutation
@@ -134,11 +197,9 @@ class App extends Component {
 
   renderCard = ({ item }) => {
     if (!item.number || !item.suit) {
-      console.error("Invalid item:", item);
       return null;  // Skip rendering this item
     }
     const cardImage = this.getCardImage(item);
-    console.log(cardImage.uri);
     return (
       <View style={{ margin: 5 }}>
         <Image source={cardImage} style={{ width: 100, height: 150 }} />
@@ -155,6 +216,7 @@ class App extends Component {
           <Button title="New Game" onPress={() => this.startNewGame("new")} />
           <Button title="Hit" onPress={() => this.hit()} disabled={!currentBet || gameOver} />
           <Button title="Stand" onPress={() => this.stand()} disabled={!currentBet || gameOver} />
+          <Button title="Next Hand" onPress={() => this.startNewGame("continue")} disabled={!gameOver} />
         </View>
         <Text>Wallet: ${wallet}</Text>
         {!currentBet && (
