@@ -29,6 +29,11 @@ class App extends Component {
     return deck;
   }
 
+  inputChange = (value) => {
+    const cleaned = value.replace(/[^0-9]/g, "");
+    this.setState({ inputValue: cleaned });
+  };
+
   getCardImage = (card) => {
     const suits = {
       "♦": "diamonds",
@@ -97,16 +102,19 @@ class App extends Component {
     });
   };
   placeBet() {
-    const currentBet = this.state.inputValue;
+    const currentBet = parseInt(this.state.inputValue, 10);
+
+    if (!this.state.inputValue || Number.isNaN(currentBet) || currentBet <= 0) {
+      this.setState({ message: "Please enter a bet greater than 0." });
+      return;
+    }
 
     if (currentBet > this.state.wallet) {
       this.setState({ message: "Insufficient funds to bet that amount." });
-    } else if (currentBet % 1 !== 0) {
-      this.setState({ message: "Please bet whole numbers only." });
     } else {
       // Deduct current bet from wallet
       const wallet = this.state.wallet - currentBet;
-      this.setState({ wallet, inputValue: "", currentBet });
+      this.setState({ wallet, inputValue: "", currentBet, message: "" });
     }
   }
 
@@ -151,7 +159,7 @@ class App extends Component {
     const { dealer, player, wallet, inputValue, currentBet, message, gameOver } = this.state;
     return (
       <View style={styles.container}>
-        <View style={styles.buttons}>
+        <View style={styles.buttonContainer}>
           <Button title="New Game" onPress={() => this.startNewGame("new")} />
           <Button title="Hit" onPress={() => this.hit()} disabled={!currentBet || gameOver} />
           <Button title="Stand" onPress={() => this.stand()} disabled={!currentBet || gameOver} />
