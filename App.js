@@ -98,7 +98,7 @@ class App extends Component {
       inputValue: "",
       currentBet: null,
       gameOver: false,
-      message: null,
+      message: "",
     });
   };
   placeBet() {
@@ -114,8 +114,129 @@ class App extends Component {
     } else {
       // Deduct current bet from wallet
       const wallet = this.state.wallet - currentBet;
-      this.setState({ wallet, inputValue: "", currentBet, message: "" });
+
+      let { deck, player, dealer } = this.state;
+      let dealtNewHand = false;
+
+      if (this.state.gameOver || player.cards.length === 0) {
+        // Previous round was settled, or no hand exists yet (bet placed before
+        // "New Game" was ever pressed) — deal a fresh hand for this round.
+        let freshDeck = deck;
+        if (freshDeck.length < 10) {
+          freshDeck = this.generateDeck();
+        }
+        const dealt = this.dealCards(freshDeck);
+        deck = dealt.updatedDeck;
+        player = dealt.player;
+        dealer = dealt.dealer;
+        dealtNewHand = true;
+      }
+
+      const dealUpdate = dealtNewHand ? { deck, player, dealer, gameOver: false } : {};
+
+      if (player.cards.length === 2 && player.count === 21) {
+        // Natural blackjack — settle immediately (dealer holds one card, can't have a natural).
+        this.setState({ wallet, inputValue: "", currentBet, message: "", ...dealUpdate });
+        this.settleRound("natural", { bet: currentBet, wallet });
+      } else {
+        this.setState({ wallet, inputValue: "", currentBet, message: "", ...dealUpdate });
+      }
     }
+  }
+
+  drawCard(deck) {
+    let sourceDeck = deck;
+    if (!sourceDeck || sourceDeck.length === 0) {
+      sourceDeck = this.generateDeck();
+    }
+    const { randomCard, updatedDeck } = this.getRandomCard(sourceDeck);
+    return { card: randomCard, updatedDeck };
+  }
+
+  hit() {
+    if (!this.state.currentBet || this.state.gameOver) return;
+
+    const { card, updatedDeck } = this.drawCard(this.state.deck);
+    const cards = [...this.state.player.cards, card];
+    const count = this.getCount(cards);
+    const player = { cards, count };
+
+    // Use the setState callback (not a bare follow-on call) so hit()'s own
+    // deck/player update is guaranteed flushed before stand() reads this.state.
+    this.setState({ deck: updatedDeck, player }, () => {
+      if (count > 21) {
+        this.settleRound("playerBust");
+      } else if (count === 21) {
+        this.stand();
+      }
+    });
+  }
+
+  stand() {
+    if (!this.state.currentBet || this.state.gameOver) return;
+
+    let deck = this.state.deck;
+    const player = this.state.player;
+
+    let cards = this.state.dealer.cards;
+    let count = this.getCount(cards);
+
+    while (count < 17) {
+      const drawn = this.drawCard(deck);
+      cards = [...cards, drawn.card];
+      deck = drawn.updatedDeck;
+      count = this.getCount(cards);
+    }
+
+    const dealer = { cards, count };
+    this.setState({ deck, dealer });
+
+    let outcome;
+    if (count > 21) outcome = "dealerBust";
+    else if (player.count > count) outcome = "playerWin";
+    else if (count > player.count) outcome = "dealerWin";
+    else outcome = "push";
+
+    this.settleRound(outcome);
+  }
+
+  settleRound(outcome, overrides = {}) {
+    const bet = overrides.bet !== undefined ? overrides.bet : this.state.currentBet;
+    const walletBeforePayout = overrides.wallet !== undefined ? overrides.wallet : this.state.wallet;
+
+    let payout = 0;
+    let message = "";
+
+    switch (outcome) {
+      case "natural":
+        payout = Math.floor(bet * 2.5);
+        message = "Blackjack! You win.";
+        break;
+      case "playerBust":
+        payout = 0;
+        message = "Bust! You lose.";
+        break;
+      case "dealerBust":
+        payout = bet * 2;
+        message = "Dealer busts! You win.";
+        break;
+      case "playerWin":
+        payout = bet * 2;
+        message = "You win!";
+        break;
+      case "dealerWin":
+        payout = 0;
+        message = "Dealer wins.";
+        break;
+      case "push":
+      default:
+        payout = bet;
+        message = "Push.";
+        break;
+    }
+
+    const wallet = walletBeforePayout + payout;
+    this.setState({ wallet, gameOver: true, currentBet: null, message });
   }
 
   getRandomCard(deck) {
