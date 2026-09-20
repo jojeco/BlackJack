@@ -82,11 +82,6 @@ class App extends Component {
     if (type === "new") {
       wallet = 100;
       deck = this.generateDeck();
-    } else if (type === "continue") {
-      if (deck.length < 10 || wallet <= 0) {
-        deck = this.generateDeck();
-        wallet = this.state.wallet > 0 ? this.state.wallet : 100;
-      }
     }
 
     const { updatedDeck, player, dealer } = this.dealCards(deck);
@@ -236,6 +231,9 @@ class App extends Component {
     }
 
     const wallet = walletBeforePayout + payout;
+    if (wallet <= 0) {
+      message += " You're out of chips.";
+    }
     this.setState({ wallet, gameOver: true, currentBet: null, message });
   }
 
@@ -278,6 +276,8 @@ class App extends Component {
 
   render() {
     const { dealer, player, wallet, inputValue, currentBet, message, gameOver } = this.state;
+    // Derived, not stored: broke only once no bet is live (wallet hits 0 mid-round on an all-in).
+    const isBroke = wallet <= 0 && !currentBet;
     return (
       <View style={styles.container}>
         <View style={styles.buttonContainer}>
@@ -286,16 +286,23 @@ class App extends Component {
           <Button title="Stand" onPress={() => this.stand()} disabled={!currentBet || gameOver} />
         </View>
         <Text>Wallet: ${wallet}</Text>
-        {!currentBet && (
-          <View style={styles.inputBet}>
-            <TextInput
-              keyboardType="numeric"
-              value={inputValue}
-              onChangeText={this.inputChange}
-              placeholder="Enter your bet"
-            />
-            <Button title="Place Bet" onPress={() => this.placeBet()} />
+        {isBroke ? (
+          <View style={styles.brokePanel}>
+            <Text style={styles.brokeText}>Out of chips! You can't place another bet.</Text>
+            <Button title="Restart with $100" onPress={() => this.startNewGame("new")} />
           </View>
+        ) : (
+          !currentBet && (
+            <View style={styles.inputBet}>
+              <TextInput
+                keyboardType="numeric"
+                value={inputValue}
+                onChangeText={this.inputChange}
+                placeholder="Enter your bet"
+              />
+              <Button title="Place Bet" onPress={() => this.placeBet()} />
+            </View>
+          )
         )}
         {player && player.cards.length > 0 && (
           <>

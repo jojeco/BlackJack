@@ -45,6 +45,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
   },
+  brokePanel: {
+    backgroundColor: '#1F2A30',
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 8,
+    alignItems: 'center',
+  },
+  brokeText: {
+    color: '#F2F2F2',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
 });
 
 export default styles;
