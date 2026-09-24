@@ -1,10 +1,12 @@
 # Next increment ideas
 
 - ✅ **Done.** `hit()`, `stand()`, `settleRound()`, and `drawCard()` are now implemented in `App.js`. A full round is playable end to end: bet → hit/stand → dealer plays out to S17 → settlement (natural/bust/dealer-bust/win/lose/push) writes the wallet and re-shows the bet input for the next round without needing "New Game".
-- ✅ **Resolved.** `getCardImage`'s asset paths were verified: all 52 standard `{number|face}_of_{suit}.png` filenames exist under `assets/cards/` (the extra `*2.png` variants and `black_joker.png` in that folder are unused, not a gap).
+- ✅ **Corrected.** The earlier note here claimed `getCardImage`'s paths were "verified" — they were, but the images still never rendered, because a `{uri: './assets/...png'}` source can't be resolved by the bundler at runtime; only a literal `require()` reaches a bundled asset. Fixed with a static 52-entry lookup table in `lib/cardImages.js`, with a rank+suit text fallback if a key is ever missing.
 - ~~`startNewGame`'s `"continue"` branch cleanup~~ ✅ **Done.** Grep showed zero callers of `"continue"` anywhere in the repo (the only call site is the "New Game" button, which passes `"new"`), so the dead branch was deleted rather than tightened.
 - ✅ **Done.** "Out of chips" state: `render()` derives `isBroke = wallet <= 0 && !currentBet` (no new state field) and swaps the bet input for a panel with a "Restart with $100" button. `settleRound()` appends "You're out of chips." when the payout leaves the wallet at 0. The panel stays hidden mid-round (an all-in leaves wallet 0 with a live bet), and a win from 0 restores the bet input.
-- Clear `message` (stale "Insufficient funds" / "Please enter a bet…") as soon as the player edits the bet field in `inputChange`, ideally with an `errorText` style.
-- Double-down: allow doubling the bet on the first two cards (needs wallet >= bet, draws exactly one card, then stands).
+- ✅ **Done.** Stale bet-validation message: `betError` is now separate from the round-outcome `message`, and `inputChange` clears it as soon as the bet field is edited, so "You win!" stays visible while typing the next bet instead of getting wiped by an unrelated field edit.
+- ✅ **Done.** Double down: a "Double" button next to Hit/Stand, enabled only with a live bet, an unfinished round, exactly two player cards, and enough wallet to match the bet. Deducts the second bet, draws exactly one card, and settles automatically (message gets a "Doubled down." prefix).
+- ✅ **Done.** Wallet and lifetime stats now persist via AsyncStorage (`lib/storage.js`), loaded on mount with the UI gated behind a "Loading…" state until that resolves. "New Game" no longer deals or touches the wallet — it just clears the table for the next bet — and a separate "Restart with $100" button is the only thing that resets the wallet.
 - Split pairs, or an insurance option when the dealer shows an ace.
-- Basic wallet persistence (AsyncStorage) so the balance survives an app restart.
+- Dealer hole card + peek: show the dealer's first card face-down until the player's turn ends, with a peek-for-blackjack check when they show an ace or a ten.
+- A "reset stats" button separate from the wallet restart, for clearing the lifetime hand counters without touching the wallet.

@@ -1,6 +1,22 @@
 import React, { Component } from "react";
 import { View, Text, Button, TextInput, FlatList, Image } from "react-native";
 import styles from "./Styles/app-styles.js";
+import { getCardImage } from "./lib/cardImages.js";
+import { loadSave, writeSave } from "./lib/storage.js";
+import {
+  generateDeck,
+  drawRandomCard,
+  getCount,
+  dealInitialHands,
+  playDealer,
+  resolveOutcome,
+  payoutFor,
+  messageFor,
+  canDoubleDown,
+  recordOutcome,
+  DEFAULT_STATS,
+  STARTING_WALLET,
+} from "./lib/blackjack.js";
 
 class App extends Component {
   constructor(props) {
@@ -9,300 +25,298 @@ class App extends Component {
       deck: [],
       dealer: { cards: [], count: 0 },
       player: { cards: [], count: 0 },
-      wallet: 100,
+      wallet: STARTING_WALLET,
       inputValue: "",
       currentBet: null,
       gameOver: false,
       message: "",
+      betError: "",
+      doubled: false,
+      loaded: false,
+      stats: DEFAULT_STATS,
     };
   }
 
-  generateDeck() {
-    const cards = [2, 3, 4, 5, 6, 7, 8, 9, 10, "J", "Q", "K", "A"];
-    const suits = ["♦", "♣", "♥", "♠"];
-    const deck = [];
-    for (const card of cards) {
-      for (const suit of suits) {
-        deck.push({ number: card, suit });
-      }
-    }
-    return deck;
+  componentDidMount() {
+    loadSave().then(({ wallet, stats }) => {
+      if (this._unmounted) return;
+      this.setState({ wallet, stats, loaded: true });
+    });
   }
+
+  componentWillUnmount() {
+    this._unmounted = true;
+  }
+
+  persist = () => {
+    if (!this.state.loaded) return;
+    writeSave({ wallet: this.state.wallet, stats: this.state.stats });
+  };
 
   inputChange = (value) => {
     const cleaned = value.replace(/[^0-9]/g, "");
-    this.setState({ inputValue: cleaned });
+    this.setState({ inputValue: cleaned, betError: "" });
   };
 
-  getCardImage = (card) => {
-    const suits = {
-      "♦": "diamonds",
-      "♣": "clubs",
-      "♥": "hearts",
-      "♠": "spades",
-    };
-    
-    const cardNames = {
-      "J": "jack",
-      "Q": "queen",
-      "K": "king",
-      "A": "ace"
-    };
-  
-    const number = cardNames[card.number] || card.number.toString();  // Map face cards to their names, or convert number to string
-    const uri = `./assets/cards/${number}_of_${suits[card.suit]}.png`;
-    return { uri };
-    
-  };
-  
+  placeBet = () => {
+    if (!this.state.loaded) return;
 
-  dealCards(deck) {
-    const playerCard1 = this.getRandomCard(deck);
-    const dealerCard1 = this.getRandomCard(playerCard1.updatedDeck);
-    const playerCard2 = this.getRandomCard(dealerCard1.updatedDeck);
-    const playerStartingHand = [playerCard1.randomCard, playerCard2.randomCard];
-    const dealerStartingHand = [dealerCard1.randomCard];
-
-    const player = {
-      cards: playerStartingHand,
-      count: this.getCount(playerStartingHand),
-    };
-    const dealer = {
-      cards: dealerStartingHand,
-      count: this.getCount(dealerStartingHand),
-    };
-
-    return { updatedDeck: playerCard2.updatedDeck, player, dealer };
-  }
-
-  startNewGame = (type = "new") => {
-    let deck = this.state.deck;
-    let wallet = this.state.wallet;
-
-    if (type === "new") {
-      wallet = 100;
-      deck = this.generateDeck();
-    }
-
-    const { updatedDeck, player, dealer } = this.dealCards(deck);
-    this.setState({
-      deck: updatedDeck,
-      dealer,
-      player,
-      wallet,
-      inputValue: "",
-      currentBet: null,
-      gameOver: false,
-      message: "",
-    });
-  };
-  placeBet() {
     const currentBet = parseInt(this.state.inputValue, 10);
 
     if (!this.state.inputValue || Number.isNaN(currentBet) || currentBet <= 0) {
-      this.setState({ message: "Please enter a bet greater than 0." });
+      this.setState({ betError: "Please enter a bet greater than 0." });
       return;
     }
 
     if (currentBet > this.state.wallet) {
-      this.setState({ message: "Insufficient funds to bet that amount." });
-    } else {
-      // Deduct current bet from wallet
-      const wallet = this.state.wallet - currentBet;
+      this.setState({ betError: "Insufficient funds to bet that amount." });
+      return;
+    }
 
-      let { deck, player, dealer } = this.state;
-      let dealtNewHand = false;
+    const wallet = this.state.wallet - currentBet;
 
-      if (this.state.gameOver || player.cards.length === 0) {
-        // Previous round was settled, or no hand exists yet (bet placed before
-        // "New Game" was ever pressed) — deal a fresh hand for this round.
-        let freshDeck = deck;
-        if (freshDeck.length < 10) {
-          freshDeck = this.generateDeck();
+    let { deck, player, dealer } = this.state;
+    let dealtNewHand = false;
+
+    if (this.state.gameOver || player.cards.length === 0) {
+      // A bet always deals its own hand — "New Game" only clears the table,
+      // it never deals — so this branch covers both a fresh round after a
+      // settled one and the very first bet of a session.
+      let freshDeck = deck;
+      if (!freshDeck || freshDeck.length < 10) {
+        freshDeck = generateDeck();
+      }
+      const dealt = dealInitialHands(freshDeck);
+      deck = dealt.deck;
+      player = dealt.player;
+      dealer = dealt.dealer;
+      dealtNewHand = true;
+    }
+
+    const dealUpdate = dealtNewHand ? { deck, player, dealer, gameOver: false } : {};
+    const isNatural = player.cards.length === 2 && player.count === 21;
+
+    this.setState(
+      {
+        wallet,
+        inputValue: "",
+        currentBet,
+        message: "",
+        betError: "",
+        doubled: false,
+        ...dealUpdate,
+      },
+      () => {
+        this.persist();
+        if (isNatural) {
+          this.settleRound("natural", { bet: currentBet, wallet });
         }
-        const dealt = this.dealCards(freshDeck);
-        deck = dealt.updatedDeck;
-        player = dealt.player;
-        dealer = dealt.dealer;
-        dealtNewHand = true;
       }
+    );
+  };
 
-      const dealUpdate = dealtNewHand ? { deck, player, dealer, gameOver: false } : {};
+  hit = () => {
+    if (!this.state.loaded || !this.state.currentBet || this.state.gameOver) return;
 
-      if (player.cards.length === 2 && player.count === 21) {
-        // Natural blackjack — settle immediately (dealer holds one card, can't have a natural).
-        this.setState({ wallet, inputValue: "", currentBet, message: "", ...dealUpdate });
-        this.settleRound("natural", { bet: currentBet, wallet });
-      } else {
-        this.setState({ wallet, inputValue: "", currentBet, message: "", ...dealUpdate });
-      }
-    }
-  }
-
-  drawCard(deck) {
-    let sourceDeck = deck;
-    if (!sourceDeck || sourceDeck.length === 0) {
-      sourceDeck = this.generateDeck();
-    }
-    const { randomCard, updatedDeck } = this.getRandomCard(sourceDeck);
-    return { card: randomCard, updatedDeck };
-  }
-
-  hit() {
-    if (!this.state.currentBet || this.state.gameOver) return;
-
-    const { card, updatedDeck } = this.drawCard(this.state.deck);
+    const { card, deck } = drawRandomCard(this.state.deck);
     const cards = [...this.state.player.cards, card];
-    const count = this.getCount(cards);
+    const count = getCount(cards);
     const player = { cards, count };
 
     // Use the setState callback (not a bare follow-on call) so hit()'s own
     // deck/player update is guaranteed flushed before stand() reads this.state.
-    this.setState({ deck: updatedDeck, player }, () => {
+    this.setState({ deck, player }, () => {
       if (count > 21) {
         this.settleRound("playerBust");
       } else if (count === 21) {
         this.stand();
       }
     });
-  }
+  };
 
-  stand() {
-    if (!this.state.currentBet || this.state.gameOver) return;
+  stand = () => {
+    if (!this.state.loaded || !this.state.currentBet || this.state.gameOver) return;
 
-    let deck = this.state.deck;
     const player = this.state.player;
+    const { dealer, deck } = playDealer(this.state.dealer.cards, this.state.deck);
 
-    let cards = this.state.dealer.cards;
-    let count = this.getCount(cards);
-
-    while (count < 17) {
-      const drawn = this.drawCard(deck);
-      cards = [...cards, drawn.card];
-      deck = drawn.updatedDeck;
-      count = this.getCount(cards);
-    }
-
-    const dealer = { cards, count };
     this.setState({ deck, dealer });
 
-    let outcome;
-    if (count > 21) outcome = "dealerBust";
-    else if (player.count > count) outcome = "playerWin";
-    else if (count > player.count) outcome = "dealerWin";
-    else outcome = "push";
-
+    const outcome = resolveOutcome(player.count, dealer.count);
     this.settleRound(outcome);
-  }
+  };
+
+  doubleDown = () => {
+    if (!this.state.loaded) return;
+
+    const { currentBet, gameOver, player, wallet, deck } = this.state;
+    if (!canDoubleDown({ currentBet, gameOver, playerCards: player.cards, wallet })) return;
+
+    const { card, deck: updatedDeck } = drawRandomCard(deck);
+    const cards = [...player.cards, card];
+    const count = getCount(cards);
+    const newPlayer = { cards, count };
+    const newWallet = wallet - currentBet;
+    const newBet = currentBet * 2;
+
+    this.setState(
+      { wallet: newWallet, currentBet: newBet, deck: updatedDeck, player: newPlayer, doubled: true },
+      () => {
+        if (count > 21) {
+          this.settleRound("playerBust");
+        } else {
+          this.stand();
+        }
+      }
+    );
+  };
 
   settleRound(outcome, overrides = {}) {
     const bet = overrides.bet !== undefined ? overrides.bet : this.state.currentBet;
     const walletBeforePayout = overrides.wallet !== undefined ? overrides.wallet : this.state.wallet;
+    const doubled = this.state.doubled;
 
-    let payout = 0;
-    let message = "";
-
-    switch (outcome) {
-      case "natural":
-        payout = Math.floor(bet * 2.5);
-        message = "Blackjack! You win.";
-        break;
-      case "playerBust":
-        payout = 0;
-        message = "Bust! You lose.";
-        break;
-      case "dealerBust":
-        payout = bet * 2;
-        message = "Dealer busts! You win.";
-        break;
-      case "playerWin":
-        payout = bet * 2;
-        message = "You win!";
-        break;
-      case "dealerWin":
-        payout = 0;
-        message = "Dealer wins.";
-        break;
-      case "push":
-      default:
-        payout = bet;
-        message = "Push.";
-        break;
-    }
-
+    const payout = payoutFor(outcome, bet);
     const wallet = walletBeforePayout + payout;
+
+    let message = messageFor(outcome, { doubled });
     if (wallet <= 0) {
       message += " You're out of chips.";
     }
-    this.setState({ wallet, gameOver: true, currentBet: null, message });
+
+    const stats = recordOutcome(this.state.stats, outcome, { doubled, wallet });
+
+    this.setState({ wallet, gameOver: true, currentBet: null, message, stats }, () => {
+      this.persist();
+    });
   }
 
-  getRandomCard(deck) {
-    const updatedDeck = [...deck];  // Copy the deck to avoid direct mutation
-    const randomIndex = Math.floor(Math.random() * updatedDeck.length);
-    const randomCard = updatedDeck[randomIndex];
-    updatedDeck.splice(randomIndex, 1);
-    return { randomCard, updatedDeck };
-  }
+  startNewGame = () => {
+    if (!this.state.loaded) return;
+    if (this.state.currentBet && !this.state.gameOver) return;
 
-  getCount(cards) {
-    const rearranged = cards.filter(card => card.number).reduce((acc, card) => {
-      if (card.number === "A") acc.push(card);
-      else acc.unshift(card);
-      return acc;
-    }, []);
+    let deck = this.state.deck;
+    if (!deck || deck.length < 10) {
+      deck = generateDeck();
+    }
 
-    return rearranged.reduce((total, card) => {
-      if (card.number === "J" || card.number === "Q" || card.number === "K") return total + 10;
-      else if (card.number === "A") return total + 11 <= 21 ? total + 11 : total + 1;
-      return total + card.number;
-    }, 0);
-  }
+    this.setState({
+      deck,
+      player: { cards: [], count: 0 },
+      dealer: { cards: [], count: 0 },
+      message: "",
+      betError: "",
+      doubled: false,
+      currentBet: null,
+      gameOver: false,
+    });
+  };
+
+  restartWallet = () => {
+    if (!this.state.loaded) return;
+
+    this.setState(
+      {
+        wallet: STARTING_WALLET,
+        deck: generateDeck(),
+        player: { cards: [], count: 0 },
+        dealer: { cards: [], count: 0 },
+        message: "",
+        betError: "",
+        doubled: false,
+        currentBet: null,
+        gameOver: false,
+      },
+      () => this.persist()
+    );
+  };
 
   renderCard = ({ item }) => {
     if (!item.number || !item.suit) {
       console.error("Invalid item:", item);
-      return null;  // Skip rendering this item
+      return null; // Skip rendering this item
     }
-    const cardImage = this.getCardImage(item);
-    console.log(cardImage.uri);
+    const cardImage = getCardImage(item);
+    if (!cardImage) {
+      const isRed = item.suit === "♦" || item.suit === "♥";
+      return (
+        <View style={{ margin: 5 }}>
+          <View style={[styles.card, isRed && styles.cardRed]}>
+            <Text style={isRed ? styles.cardRed : null}>
+              {item.number}
+              {item.suit}
+            </Text>
+          </View>
+        </View>
+      );
+    }
     return (
       <View style={{ margin: 5 }}>
         <Image source={cardImage} style={{ width: 100, height: 150 }} />
-
       </View>
     );
   };
 
   render() {
-    const { dealer, player, wallet, inputValue, currentBet, message, gameOver } = this.state;
+    const {
+      dealer,
+      player,
+      wallet,
+      inputValue,
+      currentBet,
+      message,
+      betError,
+      gameOver,
+      loaded,
+      stats,
+    } = this.state;
     // Derived, not stored: broke only once no bet is live (wallet hits 0 mid-round on an all-in).
     const isBroke = wallet <= 0 && !currentBet;
+    const doubleEnabled =
+      loaded &&
+      canDoubleDown({ currentBet, gameOver, playerCards: player.cards, wallet });
+
     return (
       <View style={styles.container}>
         <View style={styles.buttonContainer}>
-          <Button title="New Game" onPress={() => this.startNewGame("new")} />
-          <Button title="Hit" onPress={() => this.hit()} disabled={!currentBet || gameOver} />
-          <Button title="Stand" onPress={() => this.stand()} disabled={!currentBet || gameOver} />
+          <Button
+            title="New Game"
+            onPress={this.startNewGame}
+            disabled={!loaded || (!!currentBet && !gameOver)}
+          />
+          <Button title="Hit" onPress={this.hit} disabled={!loaded || !currentBet || gameOver} />
+          <Button title="Stand" onPress={this.stand} disabled={!loaded || !currentBet || gameOver} />
+          <Button title="Double" onPress={this.doubleDown} disabled={!doubleEnabled} />
         </View>
-        <Text>Wallet: ${wallet}</Text>
-        {isBroke ? (
-          <View style={styles.brokePanel}>
-            <Text style={styles.brokeText}>Out of chips! You can't place another bet.</Text>
-            <Button title="Restart with $100" onPress={() => this.startNewGame("new")} />
-          </View>
+        {!loaded ? (
+          <Text style={styles.loadingText}>Loading…</Text>
         ) : (
-          !currentBet && (
-            <View style={styles.inputBet}>
-              <TextInput
-                keyboardType="numeric"
-                value={inputValue}
-                onChangeText={this.inputChange}
-                placeholder="Enter your bet"
-              />
-              <Button title="Place Bet" onPress={() => this.placeBet()} />
-            </View>
-          )
+          <>
+            <Text>Wallet: ${wallet}</Text>
+            <Text style={styles.statsText}>
+              Hands {stats.handsPlayed} · W {stats.wins} / L {stats.losses} / P {stats.pushes} · BJ{" "}
+              {stats.blackjacks} · Peak ${stats.peakWallet}
+            </Text>
+            {isBroke ? (
+              <View style={styles.brokePanel}>
+                <Text style={styles.brokeText}>Out of chips! You can't place another bet.</Text>
+                <Button title="Restart with $100" onPress={this.restartWallet} />
+              </View>
+            ) : (
+              !currentBet && (
+                <View style={styles.inputBet}>
+                  <TextInput
+                    keyboardType="numeric"
+                    value={inputValue}
+                    onChangeText={this.inputChange}
+                    placeholder="Enter your bet"
+                  />
+                  <Button title="Place Bet" onPress={this.placeBet} />
+                </View>
+              )
+            )}
+            {betError ? <Text style={styles.errorText}>{betError}</Text> : null}
+          </>
         )}
         {player && player.cards.length > 0 && (
           <>
@@ -331,7 +345,3 @@ class App extends Component {
 }
 
 export default App;
-
-
-
-

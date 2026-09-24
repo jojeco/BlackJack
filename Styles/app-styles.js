@@ -57,6 +57,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
+  statsText: {
+    fontSize: 12,
+    color: '#1F2A30',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  errorText: {
+    color: '#8B0000',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  loadingText: {
+    textAlign: 'center',
+    marginVertical: 12,
+  },
 });
 
 export default styles;
