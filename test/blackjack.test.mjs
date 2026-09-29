@@ -51,6 +51,10 @@ test("getCount handles ace-high and ace-low combinations", () => {
   assert.equal(getCount([card("A", "♠"), card("A", "♦"), card(9, "♥")]), 21);
   assert.equal(getCount([card("A", "♠"), card(6, "♦"), card(10, "♥")]), 17);
   assert.equal(getCount([card("K", "♠"), card("Q", "♦"), card(5, "♥")]), 25);
+  assert.equal(getCount([card(10, "♠"), card("A", "♦"), card("A", "♥")]), 12);
+  assert.equal(getCount([card("K", "♠"), card("A", "♦"), card("A", "♥"), card("A", "♣")]), 13);
+  assert.equal(getCount([card("A", "♠"), card("A", "♦"), card("A", "♥"), card("A", "♣"), card(7, "♠")]), 21);
+  assert.equal(getCount([card(5, "♠"), card("A", "♦"), card("A", "♥")]), 17);
 });
 
 test("playDealer draws until 17 and stands on soft 17", () => {
